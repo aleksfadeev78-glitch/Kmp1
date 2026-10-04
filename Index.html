@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#08150f">
+<link rel="icon" href="data:,">
+<title>ТАЙГА — компас и навигатор</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Russo+One&family=PT+Sans:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#08150f; --panel:rgba(16,34,27,.82); --line:rgba(233,228,214,.14);
+  --ink:#e9e4d6; --dim:#93a294; --amber:#ffb43a; --amber2:#ff8a2a;
+  --red:#ff4a3d; --green:#6fe08f; --cyan:#5fd6c8;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:'PT Sans',system-ui,sans-serif;overflow-x:hidden;user-select:none;-webkit-user-select:none}
+button{font-family:inherit;touch-action:manipulation}
+
+/* фон: топографические горизонты, медленный дрейф */
+#bg{position:fixed;inset:-40%;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(60% 42% at 50% 0%,rgba(255,138,42,.10),transparent 70%),
+    radial-gradient(90% 60% at 50% 115%,rgba(18,64,46,.6),transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='520' fill='none' stroke='%23e9e4d6' stroke-opacity='.055' stroke-width='1.1'%3E%3Cpath d='M120 140c35-45 120-55 165-25s45 90-5 120-140 25-175-15-20-35 15-80z'/%3E%3Cpath d='M140 155c30-35 95-42 130-18s35 70-5 93-108 18-135-12-15-28 10-63z'/%3E%3Cpath d='M160 170c22-24 68-30 93-13s26 50-3 66-78 13-97-9-11-20 7-44z'/%3E%3Cpath d='M340 330c40-30 105-25 130 10s5 85-40 100-120 5-135-35 5-45 45-75z'/%3E%3Cpath d='M355 345c30-22 78-18 96 8s4 63-30 74-90 4-101-26 5-33 35-56z'/%3E%3Cpath d='M60 400c25-20 70-18 88 5s2 55-28 63-75 0-84-25 2-25 24-43z'/%3E%3C/svg%3E");
+  background-size:auto,auto,520px 520px;
+  animation:drift 140s linear infinite alternate;}
+@keyframes drift{to{transform:translate(-3%,-2%) rotate(1.2deg)}}
+
+/* ночной красный фильтр */
+#night{position:fixed;inset:0;z-index:90;pointer-events:none;background:#ff2216;mix-blend-mode:multiply;opacity:0;transition:opacity .6s}
+body.night #night{opacity:.93}
+
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,12px);z-index:99;background:#142e24;border:1px solid rgba(255,180,58,.4);
+  color:var(--ink);padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:.3s;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ===== стартовый экран ===== */
+#gate{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:22px;
+  background:linear-gradient(180deg,#0a1a13,#071209);transition:opacity .6s,visibility .6s}
+#gate.off{opacity:0;visibility:hidden}
+.gCard{max-width:420px;width:100%;text-align:center}
+.gGlyph{width:92px;height:92px;margin:0 auto 14px}
+.gGlyph svg{overflow:visible}
+.gNeedle{transform-origin:50% 50%;animation:swing 5s ease-in-out infinite}
+@keyframes swing{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(22deg)}}
+.gTitle{font-family:'Russo One';font-size:clamp(44px,13vw,64px);letter-spacing:4px;line-height:1}
+.gSub{font-family:'Russo One';font-size:13px;letter-spacing:8px;color:var(--amber);margin:8px 0 18px}
+.gList{list-style:none;text-align:left;margin:0 auto 24px;max-width:330px}
+.gList li{padding:7px 0;border-bottom:1px dashed var(--line);font-size:15px;color:#cfd8cc}
+.gList li::before{content:'— ';color:var(--amber);font-weight:700}
+#startBtn{width:100%;padding:17px;border:0;border-radius:14px;cursor:pointer;
+  font-family:'Russo One';font-size:17px;letter-spacing:3px;color:#241300;
+  background:linear-gradient(180deg,var(--amber),var(--amber2));
+  box-shadow:0 6px 26px rgba(255,150,40,.35);transition:transform .15s}
+#startBtn:active{transform:scale(.97)}
+#gateNote{margin-top:14px;font-size:12.5px;color:var(--dim);line-height:1.5}
+
+/* ===== приложение ===== */
+#app{position:relative;z-index:1;max-width:520px;margin:0 auto;padding:14px 14px 44px}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.brand{font-family:'Russo One';font-size:21px;letter-spacing:2px}
+.brand span{display:block;font-family:'PT Sans';font-size:10px;letter-spacing:4px;color:var(--amber)}
+.hRight{text-align:right}
+.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:12px;color:var(--dim)}
+.pill .dot{width:8px;height:8px;border-radius:50%;background:#666;flex:0 0 auto}
+.pill.ok .dot{background:var(--green);animation:pulse 1.6s infinite}
+.pill.bad .dot{background:var(--red)}
+@keyframes pulse{50%{box-shadow:0 0 0 5px rgba(111,224,143,.18)}}
+.clock{font-family:'Russo One';font-size:17px;margin-top:5px;letter-spacing:2px}
+
+.dialSec{text-align:center;margin-top:6px}
+.dialBox{width:min(84vw,352px);margin:0 auto}
+.dialBox svg{width:100%;height:auto;display:block;filter:drop-shadow(0 10px 34px rgba(0,0,0,.55))}
+svg text{font-family:'Russo One';fill:var(--ink)}
+.dn{font-size:15px;opacity:.85}
+.dc{font-size:31px}
+.dm{font-size:13.5px;fill:var(--amber)}
+.readout{margin-top:10px}
+.degLine{font-family:'Russo One';font-size:58px;letter-spacing:3px;line-height:1}
+.degSign{color:var(--amber);font-size:30px}
+.rumb{font-family:'Russo One';color:var(--amber);letter-spacing:9px;font-size:17px;margin-top:4px;padding-left:9px}
+.orientHint{min-height:18px;font-size:12px;color:var(--red);margin-top:4px}
+
+.coordsBar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;
+  border:1px dashed var(--line);border-radius:12px;padding:10px 13px;font-size:14px;color:#d7ded2}
+.mini{border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
+.mini:active{border-color:var(--amber);color:var(--amber)}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.cell{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:10px 9px}
+.cell label{font-size:9.5px;text-transform:uppercase;letter-spacing:1.4px;color:var(--dim);display:flex;justify-content:space-between;align-items:center}
+.cell b{display:block;font-family:'Russo One';font-weight:400;font-size:16px;margin-top:5px;white-space:nowrap}
+.miniR{border:0;background:none;color:var(--dim);font-size:13px;padding:0 2px}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:14px}
+.pHead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.pHead h2{font-family:'Russo One';font-weight:400;font-size:13px;letter-spacing:3px;color:#cfd8cc}
+.btn.amber{border:0;border-radius:10px;padding:10px 13px;cursor:pointer;font-family:'Russo One';font-size:12.5px;letter-spacing:1px;
+  color:#241300;background:linear-gradient(180deg,var(--amber),var(--amber2));box-shadow:0 4px 16px rgba(255,150,40,.28)}
+.btn.amber:active{transform:scale(.96)}
+
+#targetBox{display:flex;align-items:center;gap:14px;border:1px dashed rgba(255,180,58,.45);border-radius:13px;padding:12px;margin-bottom:12px}
+#targetBox.hidden{display:none}
+.arrowRing{width:66px;height:66px;flex:0 0 auto}
+.tInfo b{font-family:'Russo One';font-weight:400;font-size:26px;display:block}
+.tInfo span{font-size:13px;color:var(--dim);display:block;margin-top:2px}
+.tInfo em{font-style:normal;font-size:13px;color:var(--green);display:block;margin-top:3px}
+
+.wpList{display:flex;flex-wrap:wrap;gap:8px}
+.wpList .empty{font-size:13px;color:var(--dim);padding:4px 2px}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;background:transparent;
+  color:var(--ink);padding:8px 12px;font-size:13.5px;cursor:pointer;transition:border-color .2s}
+.chip.on{border-color:var(--amber);background:rgba(255,180,58,.13);box-shadow:0 0 14px rgba(255,180,58,.15)}
+.chip .km{color:var(--amber);font-size:12px}
+.chip .x{opacity:.45;font-style:normal;padding-left:2px;font-size:12px}
+.chip:active{transform:scale(.96)}
+
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.opt{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:11px;padding:12px 11px;
+  font-size:13.5px;text-align:left;cursor:pointer;transition:.2s}
+.opt.on{border-color:var(--amber);background:rgba(255,180,58,.1)}
+.opt.on::after{content:' ✓';color:var(--amber)}
+footer{margin-top:18px;font-size:12px;color:var(--dim);line-height:1.6}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="night"></div>
+<div id="toast"></div>
+
+<!-- стартовый экран: доступ к датчикам возможен только по нажатию (требование iOS) -->
+<section id="gate">
+  <div class="gCard">
+    <div class="gGlyph">
+      <svg viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="45" fill="none" stroke="#ffb43a" stroke-width="2.5"/>
+        <circle cx="50" cy="50" r="36" fill="none" stroke="rgba(233,228,214,.25)" stroke-width="1"/>
+        <g class="gNeedle">
+          <path d="M50 16 L57 50 L43 50 Z" fill="#ff4a3d"/>
+          <path d="M50 84 L57 50 L43 50 Z" fill="#e9e4d6"/>
+        </g>
+        <circle cx="50" cy="50" r="4" fill="#ffb43a"/>
+      </svg>
+    </div>
+    <div class="gTitle">ТАЙГА</div>
+    <div class="gSub">КОМПАС · НАВИГАТОР</div>
+    <ul class="gList">
+      <li>Стрелка на север и точный азимут</li>
+      <li>Метки: «вернуться к машине / даче»</li>
+      <li>Координаты, высота, скорость, путь</li>
+      <li>Ночной режим и «не гасить экран»</li>
+    </ul>
+    <button id="startBtn">ВКЛЮЧИТЬ КОМПАС</button>
+    <div id="gateNote">Понадобится доступ к геолокации и датчикам ориентации. Работает без интернета.</div>
+  </div>
+</section>
+
+<main id="app" hidden>
+  <header>
+    <div class="brand">ТАЙГА<span>КОМПАС · GPS</span></div>
+    <div class="hRight">
+      <div class="pill" id="gpsPill"><i class="dot"></i><span id="gpsTxt">поиск спутников…</span></div>
+      <div class="clock" id="clock">--:--</div>
+    </div>
+  </header>
+
+  <section class="dialSec">
+    <div class="dialBox">
+      <svg id="dial" viewBox="0 0 400 400">
+        <defs>
+          <radialGradient id="face" cx="50%" cy="42%" r="66%">
+            <stop offset="0" stop-color="#133227"/><stop offset=".72" stop-color="#0b1d16"/><stop offset="1" stop-color="#07130e"/>
+          </radialGradient>
+        </defs>
+        <circle cx="200" cy="200" r="198" fill="url(#face)" stroke="rgba(233,228,214,.2)" stroke-width="1.5"/>
+        <circle cx="200" cy="200" r="128" fill="none" stroke="rgba(233,228,214,.07)"/>
+        <g id="rotor"></g>
+        <g id="tgt" opacity="0">
+          <path d="M200 36 l13 27 h-26 z" fill="#5fd6c8"/>
+          <line x1="200" y1="66" x2="200" y2="92" stroke="#5fd6c8" stroke-width="2" stroke-dasharray="3 5" stroke-linecap="round"/>
+        </g>
+        <!-- визирная риска (направление взгляда телефона) -->
+        <path d="M200 4 l12 23 h-24 z" fill="#ffb43a"/>
+        <line x1="200" y1="30" x2="200" y2="58" stroke="#ffb43a" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="168" y1="200" x2="232" y2="200" stroke="rgba(233,228,214,.16)"/>
+        <line x1="200" y1="168" x2="200" y2="232" stroke="rgba(233,228,214,.16)"/>
+        <circle cx="200" cy="200" r="5.5" fill="#e9e4d6"/>
+      </svg>
+    </div>
+    <div class="readout">
+      <div class="degLine"><span id="degBig">···</span><span class="degSign">°</span></div>
+      <div class="rumb" id="rumb">—</div>
+      <div class="orientHint" id="orientHint"></div>
+    </div>
+  </section>
+
+  <section class="coordsBar">
+    <span id="coordsTxt">координаты появятся…</span>
+    <button class="mini" id="copyBtn">копировать</button>
+  </section>
+
+  <section class="stats">
+    <div class="cell"><label>точность</label><b id="accV">—</b></div>
+    <div class="cell"><label>высота</label><b id="altV">—</b></div>
+    <div class="cell"><label>скорость</label><b id="spdV">—</b></div>
+    <div class="cell"><label>путь <button class="miniR" id="odoReset" title="сбросить">↺</button></label><b id="odoV">0 м</b></div>
+  </section>
+
+  <section class="panel">
+    <div class="pHead"><h2>МЕТКИ И ВОЗВРАТ</h2><button class="btn amber" id="addWp">＋ ОТМЕТИТЬ ЗДЕСЬ</button></div>
+    <div id="targetBox" class="hidden">
+      <div class="arrowRing">
+        <svg viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r="29" fill="rgba(95,214,200,.06)" stroke="rgba(95,214,200,.4)" stroke-width="1.5"/>
+          <g id="tgtArrow"><path d="M32 9 L42 41 L32 33 L22 41 Z" fill="#5fd6c8"/></g>
+        </svg>
+      </div>
+      <div class="tInfo">
+        <b id="tDist">—</b>
+        <span id="tBear">азимут —°</span>
+        <em id="tHint">наведите телефон</em>
+      </div>
+    </div>
+    <div id="wpList" class="wpList"></div>
+  </section>
+
+  <section class="panel">
+    <div class="pHead"><h2>РЕЖИМЫ</h2></div>
+    <div class="opts">
+      <button class="opt" id="optNight">🌙 Ночной экран</button>
+      <button class="opt" id="optWake">🔦 Не гасить экран</button>
+      <button class="opt" id="optVib">📳 Вибрация на севере</button>
+      <button class="opt" id="optFmt">Градусы: 55.75°</button>
+    </div>
+  </section>
+
+  <footer>Если стрелка «плывёт» — откалибруйте магнитометр: порисуйте телефоном в воздухе восьмёрку. Держите телефон горизонтально и вдали от металла и ЛЭП. На iPhone компас точнее по данным «север истинный».</footer>
+</main>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const RUMB=['С','СВ','В','ЮВ','Ю','ЮЗ','З','СЗ'];
+const norm=a=>(a%360+360)%360;
+const rad=d=>d*Math.PI/180;
+
+/* ---------- геодезия ---------- */
+function distM(a,b){const R=6371000,dLa=rad(b.lat-a.lat),dLo=rad(b.lon-a.lon);
+  const s=Math.sin(dLa/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));}
+function bearingDeg(a,b){const y=Math.sin(rad(b.lon-a.lon))*Math.cos(rad(b.lat));
+  const x=Math.cos(rad(a.lat))*Math.sin(rad(b.lat))-Math.sin(rad(a.lat))*Math.cos(rad(b.lat))*Math.cos(rad(b.lon-a.lon));
+  return norm(Math.atan2(y,x)*180/Math.PI);}
+function fmtDist(m){if(m<1000)return Math.round(m)+' м';
+  const k=m/1000;return (k<10?k.toFixed(2):k<100?k.toFixed(1):Math.round(k))+' км';}
+
+/* ---------- состояние ---------- */
+let targetH=0,displayH=0,prevDisp=0,haveOri=false,lastDeg=-1,lastUi=0,vibCool=0;
+let cur=null,odo=0,wakeLock=null;
+let wps=JSON.parse(localStorage.getItem('tg_wp')||'[]');
+let activeId=localStorage.getItem('tg_active')||null;
+let opts=Object.assign({night:false,wake:false,vib:true},JSON.parse(localStorage.getItem('tg_opts')||'{}'));
+let fmt=localStorage.getItem('tg_fmt')||'dec';
+const activeWp=()=>wps.find(w=>w.id==activeId)||null;
+
+/* ---------- шкала компаса ---------- */
+(function build(){
+  let s='';
+  for(let a=0;a<360;a+=5){
+    const len=a%90===0?26:a%45===0?19:a%15===0?13:7;
+    const w=a%90===0?3:a%45===0?2.2:a%15===0?1.5:1;
+    const op=a%15===0?.9:.42;
+    const sn=Math.sin(rad(a)),cs=Math.cos(rad(a)),r1=190,r2=190-len;
+    s+=`<line x1="${200+r1*sn}" y1="${200-r1*cs}" x2="${200+r2*sn}" y2="${200-r2*cs}" stroke="#e9e4d6" stroke-opacity="${op}" stroke-width="${w}"/>`;
+  }
+  for(let a=30;a<360;a+=30){if(a%90===0)continue;
+    s+=`<text class="dn" x="200" y="50" text-anchor="middle" transform="rotate(${a} 200 200)">${a}</text>`;}
+  [[0,'С','#ff4a3d'],[90,'В'],[180,'Ю'],[270,'З']].forEach(([a,l,c])=>{
+    s+=`<text class="dc" x="200" y="52" text-anchor="middle" transform="rotate(${a} 200 200)" fill="${c||'#e9e4d6'}">${l}</text>`;});
+  [45,135,225,315].forEach((a,i)=>{
+    s+=`<text class="dm" x="200" y="50" text-anchor="middle" transform="rotate(${a} 200 200)">${['СВ','ЮВ','ЮЗ','СЗ'][i]}</text>`;});
+  s+='<path d="M200 60 l7 15 h-14 z" fill="#ff4a3d"/>';
+  $('rotor').innerHTML=s;
+})();
+
+/* ---------- датчики ориентации ---------- */
+function onOri(e){
+  let h=null;
+  if(typeof e.webkitCompassHeading==='number'&&!isNaN(e.webkitCompassHeading))h=e.webkitCompassHeading;
+  else if(e.alpha!=null)h=360-e.alpha;
+  if(h==null)return;
+  targetH=norm(h);
+  if(!haveOri){haveOri=true;$('orientHint').textContent='';}
+}
+function startOrientation(){
+  if('ondeviceorientationabsolute' in window)window.addEventListener('deviceorientationabsolute',onOri,true);
+  else window.addEventListener('deviceorientation',onOri,true);
+  setTimeout(()=>{if(!haveOri)window.addEventListener('deviceorientation',onOri,true);},2500);
+  setTimeout(()=>{if(!haveOri)$('orientHint').textContent='датчик ориентации не отвечает';},6000);
+}
+
+/* ---------- GPS ---------- */
+function gpsTxt(t,cls){const p=$('gpsPill');p.classList.remove('ok','bad');if(cls)p.classList.add(cls);$('gpsTxt').textContent=t;}
+function startGeo(){
+  if(!('geolocation' in navigator)){gpsTxt('GPS недоступен','bad');return;}
+  navigator.geolocation.watchPosition(p=>{
+    const c=p.coords,pos={lat:c.latitude,lon:c.longitude};
+    if(cur){const d=distM(cur,pos);if(d>Math.max(3,(c.accuracy||30)*.4))odo+=d;}
+    cur=pos;
+    gpsTxt('±'+Math.round(c.accuracy||0)+' м','ok');
+    $('accV').textContent='±'+Math.round(c.accuracy||0)+' м';
+    $('altV').textContent=c.altitude!=null?Math.round(c.altitude)+' м':'—';
+    $('spdV').textContent=c.speed!=null?(c.speed*3.6).toFixed(1)+' км/ч':'—';
+    $('odoV').textContent=fmtDist(odo);
+    renderCoords();renderWpDistances();
+  },e=>{
+    gpsTxt(e.code===1?'доступ запрещён':e.code===3?'нет сигнала':'ошибка GPS','bad');
+  },{enableHighAccuracy:true,maximumAge:2000,timeout:20000});
+}
+
+/* ---------- координаты ---------- */
+function coordStr(){
+  if(!cur)return null;
+  if(fmt==='dec')return cur.lat.toFixed(5)+'°, '+cur.lon.toFixed(5)+'°';
+  const f=(v,p,n)=>{const a=Math.abs(v),d=Math.floor(a),m=(a-d)*60;return d+'°'+m.toFixed(3)+'′ '+(v>=0?p:n);};
+  return f(cur.lat,'N','S')+', '+f(cur.lon,'E','W');
+}
+function renderCoords(){$('coordsTxt').textContent=coordStr()||'координаты появятся…';}
+$('copyBtn').onclick=()=>{
+  if(!cur){toast('нет сигнала GPS');return;}
+  const t=cur.lat.toFixed(6)+', '+cur.lon.toFixed(6);
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('Скопировано: '+t)).catch(()=>toast(t));
+};
+$('odoReset').onclick=()=>{odo=0;$('odoV').textContent='0 м';toast('Одометр сброшен');};
+
+/* ---------- метки ---------- */
+function saveWp(){localStorage.setItem('tg_wp',JSON.stringify(wps));localStorage.setItem('tg_active',activeId||'');}
+function renderWpList(){
+  const box=$('wpList');box.innerHTML='';
+  if(!wps.length){box.innerHTML='<span class="empty">Пока пусто. Отметьте машину или калитку — и стрелка приведёт обратно.</span>';}
+  wps.forEach(w=>{
+    const b=document.createElement('button');b.className='chip'+(w.id==activeId?' on':'');b.dataset.id=w.id;
+    b.innerHTML=`<span class="nm">📍 ${w.name}</span><span class="km">—</span><i class="x">✕</i>`;
+    box.appendChild(b);
+  });
+  updateTargetBox();
+}
+$('wpList').addEventListener('click',e=>{
+  const chip=e.target.closest('.chip');if(!chip)return;
+  const id=chip.dataset.id;
+  if(e.target.classList.contains('x')){
+    wps=wps.filter(w=>w.id!=id);if(activeId==id)activeId=null;
+    saveWp();renderWpList();renderWpDistances();toast('Метка удалена');return;
+  }
+  activeId=(activeId==id)?null:id;saveWp();renderWpList();renderWpDistances();
+});
+$('addWp').onclick=()=>{
+  if(!cur){toast('Сначала нужен сигнал GPS');return;}
+  const id=Date.now();
+  wps.push({id,name:'Метка '+(wps.length+1),lat:cur.lat,lon:cur.lon});
+  activeId=id;saveWp();renderWpList();renderWpDistances();
+  if(navigator.vibrate)navigator.vibrate(25);
+  toast('Метка сохранена');
+};
+function updateTargetBox(){
+  $('targetBox').classList.toggle('hidden',!activeWp());
+}
+function renderWpDistances(){
+  if(!cur)return;
+  document.querySelectorAll('.chip').forEach(ch=>{
+    const w=wps.find(x=>x.id==ch.dataset.id);
+    if(w)ch.querySelector('.km').textContent=fmtDist(distM(cur,w));
+  });
+}
+
+/* ---------- режимы ---------- */
+function saveOpts(){localStorage.setItem('tg_opts',JSON.stringify(opts));}
+function bindOpt(btn,key,after){
+  btn.classList.toggle('on',!!opts[key]);
+  btn.onclick=()=>{opts[key]=!opts[key];btn.classList.toggle('on',opts[key]);saveOpts();after&&after(opts[key]);};
+}
+async function setWake(on){
+  try{
+    if(on&&'wakeLock' in navigator)wakeLock=await navigator.wakeLock.request('screen');
+    else if(wakeLock){await wakeLock.release();wakeLock=null;}
+  }catch(e){if(on)toast('Не поддерживается этим браузером');}
+}
+document.addEventListener('visibilitychange',()=>{
+  if(opts.wake&&document.visibilityState==='visible'&&!wakeLock)setWake(true);
+});
+
+/* ---------- главный цикл ---------- */
+function frame(t){
+  const diff=norm(targetH-displayH+180)-180;
+  displayH=norm(displayH+diff*.16);
+  $('rotor').setAttribute('transform',`rotate(${(-displayH).toFixed(2)} 200 200)`);
+  const d=Math.floor(displayH)%360;
+  if(d!==lastDeg){lastDeg=d;
+    $('degBig').textContent=String(d).padStart(3,'0');
+    $('rumb').textContent=RUMB[Math.round(displayH/45)%8];
+  }
+  if(opts.vib&&navigator.vibrate&&t>vibCool){
+    if((prevDisp<4&&displayH>356)||(prevDisp>356&&displayH<4)){navigator.vibrate(35);vibCool=t+1500;}
+  }
+  prevDisp=displayH;
+  const wp=activeWp();
+  if(wp&&cur){
+    const b=bearingDeg(cur,wp);
+    $('tgt').setAttribute('transform',`rotate(${norm(b-displayH).toFixed(2)} 200 200)`);
+    $('tgtArrow').setAttribute('transform',`rotate(${norm(b-displayH).toFixed(2)} 32 32)`);
+    if(t-lastUi>400){lastUi=t;
+      const dist=distM(cur,wp),rel=norm(b-displayH+180)-180;
+      $('tDist').textContent=fmtDist(dist);
+      $('tBear').textContent='азимут '+Math.round(b)+'° · '+wp.name;
+      $('tHint').textContent=dist<12?'вы на месте 🎯':Math.abs(rel)<12?'→ прямо по курсу':(rel>0?'справа ':'слева ')+Math.round(Math.abs(rel))+'°';
+      $('tHint').style.color=dist<12?'var(--green)':'var(--cyan)';
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- toast / часы ---------- */
+let toastT;function toast(m){const el=$('toast');el.textContent=m;el.classList.add('show');
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2300);}
+setInterval(()=>{$('clock').textContent=new Date().toTimeString().slice(0,5);},1000);
+
+/* ---------- запуск ---------- */
+$('startBtn').onclick=async()=>{
+  const btn=$('startBtn');btn.disabled=true;btn.textContent='ЗАПУСК…';
+  if(!window.isSecureContext){$('gateNote').style.color='var(--red)';
+    $('gateNote').textContent='Браузер требует HTTPS (или localhost) для GPS и датчиков. Загрузите файл на сервер или откройте через локальный хостинг.';}
+  try{
+    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+      const r=await DeviceOrientationEvent.requestPermission();
+      if(r!=='granted')$('orientHint').textContent='доступ к датчикам отклонён';
+    }
+  }catch(e){}
+  $('gate').classList.add('off');$('app').hidden=false;
+  startOrientation();startGeo();requestAnimationFrame(frame);
+};
+
+/* восстановление настроек */
+document.body.classList.toggle('night',opts.night);
+bindOpt($('optNight'),'night',on=>document.body.classList.toggle('night',on));
+bindOpt($('optWake'),'wake',on=>setWake(on));
+bindOpt($('optVib'),'vib');
+const fmtBtn=$('optFmt');
+const fmtLabel=()=>fmtBtn.textContent=fmt==='dec'?'Градусы: 55.75°':'Градусы: 55°45′';
+fmtLabel();
+fmtBtn.onclick=()=>{fmt=fmt==='dec'?'dms':'dec';localStorage.setItem('tg_fmt',fmt);fmtLabel();renderCoords();};
+renderWpList();renderCoords();
+</script>
+</body>
+</html>
